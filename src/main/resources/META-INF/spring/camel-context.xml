@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:camel="http://camel.apache.org/schema/spring"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd        http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
+    <!-- You could also define a traditional camel context here -->
+    <camelContext id="camel"
+        xmlns="http://camel.apache.org/schema/spring"
+        xmlns:p="urn:iso:std:iso:20022:tech:xsd:acmt.023.001.02" xmlns:tns="http://www.abank.com/Payments/PmtVldtSrvc">
+        
+        <route id="file-to-dom-then-multicast">
+            <!-- <from id="_to1" uri="cxfrs:beanId:address"/> -->
+            <from id="read-directory" uri="file:workdata"/>
+            <log id="log-filename" message="Receiving order ${file:name}"/>
+            <!-- <log id="log-msg" message="Message>> ${body}"/> -->
+            <convertBodyTo id="convert-file-to-dom" type="org.w3c.dom.Document"/>
+            <multicast id="send-msg-to-individual-services" stopOnException="true">
+                <to id="direct-source-msg-id" uri="direct:srcSysMsgID"/>
+                <to id="direct-iban-validation" uri="direct:ibanValidation"/>
+            </multicast>
+        </route>
+        
+        <route id="src-msg-id-to-log">
+            <from id="direct-srcSysMsgID" uri="direct:srcSysMsgID"/>
+            <setBody id="set-source-msg-id">
+                <xpath resultType="org.w3c.dom.Document">tns:PmtValRq/tns:RqMsgHdr/tns:SourceSystemMessageID</xpath>
+            </setBody>
+            <log id="log-src-msg-id" message="Source system msg id>> ${body}"/>
+        </route>
+        
+        <route id="invoke-iban-validation-service">
+            <from id="direct-ibanValidation" uri="direct:ibanValidation"/>
+            <setBody id="set-ibanVal">
+                <xpath resultType="org.w3c.dom.Document">tns:PmtValRq/p:Document/p:IdVrfctnReq/p:SplmtryData/p:Envlp/tns:SplValData/tns:IBANValRq/tns:Id</xpath>
+            </setBody>
+            <log id="log-iban-id" message="IBAN validation req>> ${body}"/>
+        </route>
+    </camelContext>
+</beans>
